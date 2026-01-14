@@ -3,6 +3,9 @@
 library(DatabaseConnector)
 library(CohortMethod)
 
+library(dplyr)
+library(Cyclops)
+
 # install.packages("rJava", type="source")
 
 # install.packages("DatabaseConnector") #6.3.2 was last version
@@ -14,20 +17,19 @@ library(CohortMethod)
 # library(dplyr)
 # library(Cyclops)
 
+pathToCMData = "artifacts/CmData_l1_t261100000_c331100000.zip" # sema vs empa example 
+pathToPS = "artifacts/Ps_IPTW_t261100000_c331100000_o1.rds" # for outcome 1: 3-pt MACE
 
-cohortMethodData <- CohortMethod::loadCohortMethodData("cohortMethodData_t1788868_c1788867_o1788866.zip")
-
-# For the LEGEND-HTN study, we pick target exposure thiazdes (atlas id 1788868), 
-# comparator exposure ACEi (atlas id 1788867), and outcome  AMI (atlas id 1788866). 
+cohortMethodData <- CohortMethod::loadCohortMethodData(pathToCMData)
 
 studyPop <- CohortMethod::createStudyPopulation(
-  cohortMethodData = cohortMethodData, 
-  outcomeId = 1788866, # AMI
+  cohortMethodData = cohortMethodData,
+  outcomeId = 1, # 3-pt MACE
   firstExposureOnly = FALSE,
-  restrictToCommonPeriod = FALSE, 
-  washoutPeriod = 0, 
-  removeDuplicateSubjects = "keep all", 
-  removeSubjectsWithPriorOutcome = FALSE, 
+  restrictToCommonPeriod = FALSE,
+  washoutPeriod = 0,
+  removeDuplicateSubjects = "keep all",
+  removeSubjectsWithPriorOutcome = FALSE,
   minDaysAtRisk = 1,
   riskWindowStart = 0,
   startAnchor = "cohort start",
@@ -35,13 +37,16 @@ studyPop <- CohortMethod::createStudyPopulation(
   endAnchor = "cohort end"
 )
 
+# # create propensity model
+# this takes quite a while
+ps <- createPs(cohortMethodData = cohortMethodData, population = studyPop) # this takes a while 
+#saveRDS(ps, "temp_ps.rds")
+saveRDS(ps, pathToPS)
 
-# create propensity model
-ps <- createPs(cohortMethodData = cohortMethodData, population = studyPop)
-saveRDS(ps, "ps_study.rds")
+## load trained PS model (with IPTW)
+ps <- readRDS(pathToPS)
 
 # outcome model
-# ps = readRDS("ps_study.rds") # pick up where you left off if you need
 
 # unadjusted outcome model
 outcomeModel <- fitOutcomeModel(population = ps,
@@ -50,14 +55,30 @@ outcomeModel <- fitOutcomeModel(population = ps,
 
 # outcome model but with matching
 matchedPop <- matchOnPs(ps, caliper = 0.2)
-# pop size after matching is 22154
+
 outcomeModel_matching <- fitOutcomeModel(population = matchedPop,
                                          modelType = "cox")
 
-bal = computeCovariateBalance(
+bal_matching = computeCovariateBalance(
   population = matchedPop,
   cohortMethodData,
   subgroupCovariateId = NULL,
   maxCohortSize = 250000,
   covariateFilter = NULL
 )
+
+# outcome model, with PS stratification? 
+stratPop <- stratifyByPs(ps, numberOfStrata = 5) # default 5 strata
+outcomeModel_strat <- fitOutcomeModel(population = stratPop,
+                                         modelType = "cox")
+
+bal_strat = computeCovariateBalance(
+  population = stratPop,
+  cohortMethodData,
+  subgroupCovariateId = NULL,
+  maxCohortSize = 250000,
+  covariateFilter = NULL
+)
+
+
+

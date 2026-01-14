@@ -23,16 +23,27 @@
 
 ### 1) load cohort method data
 
+pathToCMData = "artifacts/CmData_l1_t261100000_c331100000.zip" # sema vs empa example 
+pathToPS = "artifacts/Ps_IPTW_t261100000_c331100000_o1.rds" # for outcome 1: 3-pt MACE
+
+pathToCensoringModel = "artifacts/censoring_Cox__t261100000_c331100000_o1.rds"
+
+ooi = 1 # focus on outcome 1 only
+
 # important: use the "all covar" version
-cohortMethodData <- CohortMethod::loadCohortMethodData("cohortMethodData_t1788868_c1788867_o1788866_allcovar.zip")
+cohortMethodData <- CohortMethod::loadCohortMethodData(pathToCMData)
 
 ### 2) build the censored_cohort table 
+
+# subset outcomes table by outcome of interest 
+cohortMethodData$outcomeOfInterest = cohortMethodData$outcomes %>% filter(outcomeId == ooi)
 
 # identify who is censored (i.e. 1 - outcome)
 # in the case of how cyclops data is written, we identify censored
 # individuals via who is *not* in the outcomes table 
 cohortMethodData$censored_cohort <- cohortMethodData$cohorts %>%
-  anti_join(cohortMethodData$outcomes, by = "rowId")
+  anti_join(cohortMethodData$outcomeOfInterest, by = "rowId")
+
 
 ### 3) now build the "censored_outcomes" table with daysToCohortEnd (or daysToObsEnd) column 
 
@@ -40,7 +51,7 @@ cohortMethodData$censored_outcomes <- cohortMethodData$censored_cohort %>%
   # 1) Select the needed column, renaming 'daysToObsEnd' to 'daysToEvent' -- "Event" here means "Censoring event"
   select(
     rowId,
-    daysToEvent = daysToObsEnd # can use daysToCohortEnd or daysToObsEnd, depending on your original TAR defn
+    daysToEvent = daysToCohortEnd # can use daysToCohortEnd or daysToObsEnd, depending on your original TAR defn
   ) %>%
   # 2) Add the constant column outcomeId
   mutate(
@@ -86,8 +97,9 @@ lassoPrior <- Cyclops::createPrior(
   useCrossValidation = TRUE
 )
 
+# this takes a while
 Cox_censoring <- fitCyclopsModel(censored_df,
                                  prior = lassoPrior)
 
-saveRDS(Cox_censoring, "Cox_censoring.rds")
+saveRDS(Cox_censoring, pathToCensoringModel)
 

@@ -1,7 +1,7 @@
 # run after running find_kZ_script.R
-library("dplyr")
-library("data.table")
-library("survival")
+library(dplyr)
+library(data.table)
+library(survival)
 
 # outcomes_df.long = read.csv("survival_weights_endObsDate.csv") %>% data.table()
 
@@ -44,37 +44,38 @@ outcomes_df.long$comb = outcomes_df.long$Stab_ipcw_trunc * outcomes_df.long$iptw
 # FIT MODELS
 #####################
 
-# LEGEND THZ VALUE FOR AMI IS 0.84 (0.75-0.95)
+# LegendT2dm sema vs empa for 3-pt MACE (before calibration) is: 
+# CCAE: 
+# OptumEHR: 
 
 # UNADJUSTED
 fit_unadjusted <- coxph(Surv(Tstart, time, ami) ~ treatment, data=outcomes_df.long, 
                         id=rowId)
-summary(fit_unadjusted) # coef = -0.73228  SE = 0.08192; HR = 2.07982
+summary(fit_unadjusted) # coef = 0.1344  SE = 0.1347; HR = 0.8743 (0.6714, 1.138)
 
 
-### IPCW STABILIZED 
+### IPCW STABILIZED --- censoring only 
 # fit_ipcw_Stab <- coxph(Surv(Tstart, time, ami) ~ treatment , data=outcomes_df.long, 
 #                       id=rowId, weights = Stab_ipcw) # unstab exp(coef) = 0.51 (1/0.51 = 1.95)
-# summary(fit_ipcw_Stab) # coef = -0.77947, SE = 0.09738; HR = 0.45865
+# summary(fit_ipcw_Stab) 
 
 fit_ipcw_Stab_trunc <- coxph(Surv(Tstart, time, ami) ~ treatment , data=outcomes_df.long, 
                              id=rowId, weights = Stab_ipcw_trunc) # unstab exp(coef) = 0.51 (1/0.51 = 1.95)
-summary(fit_ipcw_Stab_trunc) # coef = -0.78541, SE = 0.09659; HR = 0.45593
+summary(fit_ipcw_Stab_trunc) # coef = -0.1756, SE = 0.1543; HR = 0.839 (0.6326, 1.113)
 
 
 # IPTW weights ====== CONFOUNDING
 
 #fit_iptw <- coxph(Surv(Tstart, time, ami) ~ treatment , data=outcomes_df.long, 
 #                        id=rowId, weights = iptw) 
-#summary(fit_iptw) # coef -0.3141; SE =  0.1408; HR = 0.7305 
+#summary(fit_iptw) 
 
 fit_iptw_trunc <- coxph(Surv(Tstart, time, ami) ~ treatment , data=outcomes_df.long, 
                         id=rowId, weights = iptw_trunc) 
-summary(fit_iptw_trunc) # coef = -0.2098; SE = 0.1022; HR = 0.8108
+summary(fit_iptw_trunc) # coef = -0.02175; SE = 0.21581; HR = 0.9785 (0.6818, 1.404)
 
 
-
-# combined
+# combined weights: IPCW & IPTW
 fit_comb <- coxph(Surv(Tstart, time, ami) ~ treatment , data=outcomes_df.long, 
                   id=rowId, weights = comb) 
-summary(fit_comb) # coef = -0.08742 SE =  0.11319; exp: 0.91629
+summary(fit_comb) # coef = -0.08727 SE =  0.24035; HR = 0.9164 (0.6199, 1.355)

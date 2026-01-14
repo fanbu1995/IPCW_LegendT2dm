@@ -9,15 +9,30 @@ library(survival)
 # for progress bar
 library(progress)
 
+# Fan to-do: need to change `ami` to, say, `outcome` to apply generically to LegendT2dm outcomes
+
 ### -- 0) Read in data
 
-ps = readRDS("ps_study.rds") # this reads in the propensity score results from find_ps_legend_script.R
+pathToCMData = "artifacts/CmData_l1_t261100000_c331100000.zip" # sema vs empa example 
+pathToPS = "artifacts/Ps_IPTW_t261100000_c331100000_o1.rds" # for outcome 1: 3-pt MACE
+
+pathToCensoringModel = "artifacts/censoring_Cox__t261100000_c331100000_o1.rds"
+
+pathToSurvWeights = "artifacts/surv_weights_endCohortDate_t261100000_c331100000_o1.rds"
+
+ooi = 1
+
+# this reads in the propensity score results from find_ps_legend_script.R
+ps = readRDS(pathToPS) 
 
 # important: make sure you read in the cohort with all variables
-cohortMethodData <- CohortMethod::loadCohortMethodData("cohortMethodData_t1788868_c1788867_o1788866_allcovar.zip")
+cohortMethodData <- CohortMethod::loadCohortMethodData(pathToCMData)
+
+## restrict to OOI only 
+cohortMethodData$outcomeOfInterest = cohortMethodData$outcomes %>% filter(outcomeId == ooi)
 
 # from cox censoring model that was fit:
-Cox_censoring = readRDS("Cox_censoring.rds")
+Cox_censoring = readRDS(pathToCensoringModel)
 
 ### -- 1) Restrict CohortMethodData to the PS analysis cohort --
 # make sure cohort method data contains individuals included in PS analysis 
@@ -33,8 +48,8 @@ cohortMethodData$cohorts <- collect(cohortMethodData$cohorts) %>%
 cohortMethodData$covariates <- collect(cohortMethodData$covariates) %>%
   filter(rowId %in% cohort_ids)
 
-# filter outcomes 
-cohortMethodData$outcomes <- collect(cohortMethodData$outcomes) %>%
+# filter outcomes (restrict to table on OOI only...)
+cohortMethodData$outcomeOfInterest <- collect(cohortMethodData$outcomeOfInterest) %>%
   filter(rowId %in% cohort_ids)
 
 ### -- 2) build survival df from the ps table - # for sanity check, cumc had 42606 total
@@ -206,11 +221,12 @@ transform.data <- function(data, cut.times)
 # are more spaced out -- can space out the cut times
 
 # hist(outcomes_df$time)
-dist = summary(outcomes_df$time) # max is 9647 days = 26.47 years; mean is 8 years; median is 7.84 years
+dist = summary(outcomes_df$time) # max is 2840 days, median 137; very left skewed
 
-# one way to do cut times is space them out evenlly till the max
-cut.times = seq(from = 60, to = floor(max(outcomes_df$time) / 60) * 60, by = 60) 
+# one way to do cut times is space them out evenly till the max
+# cut.times = seq(from = 60, to = floor(max(outcomes_df$time) / 60) * 60, by = 60) 
 # another way is to do it more in the beginning then less till the end since dist of time is skewed
+# Fan: I will use this to get started; seems more reasonable in my case 
 cut.times = c(seq(from = 1, to = dist[2], by = 5),# go by 5 till the first quartile
               seq(from = dist[2] + 5, to = dist[3], by = 10), # by 10 to the median
               seq(from = dist[3] + 10, to = dist[5], by = 30), # by 30 to Q3
@@ -255,4 +271,4 @@ outcomes_df.long$Unstab_ipcw = 1/outcomes_df.long$KZ
 outcomes_df.long$Stab_ipcw = outcomes_df.long$K0_ti/outcomes_df.long$KZ
 
 # save
-write.csv(outcomes_df.long, "survival_weights_endObsDate.csv")
+write.csv(outcomes_df.long, pathToSurvWeights)
