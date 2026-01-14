@@ -314,6 +314,12 @@ summarize_cox_fit <- function(fit, label) {
 }
 
 fit_weighted_cox_models <- function(outcomes_df.long) {
+  if (!"event" %in% names(outcomes_df.long) && "ami" %in% names(outcomes_df.long)) {
+    outcomes_df.long$event <- outcomes_df.long$ami
+  }
+  if (!"event" %in% names(outcomes_df.long)) {
+    stop("Expected an outcome column named 'event' (or legacy 'ami') in outcomes_df.long.")
+  }
   outcomes_df.long <- prepare_weighted_dataset(outcomes_df.long)
 
   fit_unadjusted <- coxph(Surv(Tstart, time, event) ~ treatment, data = outcomes_df.long, id = rowId)
