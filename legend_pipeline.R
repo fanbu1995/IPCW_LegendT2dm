@@ -47,7 +47,8 @@ run_ps_legend <- function(pathToCMData,
   )
 
   progress_message("Step 3/4: Fitting propensity score model.", show_progress)
-  ps <- createPs(cohortMethodData = cohortMethodData, population = studyPop)
+  ps <- createPs(cohortMethodData = cohortMethodData, population = studyPop, 
+                 control = Cyclops::createControl(maxIterations = 2000)) # try more iterations...
 
   if (!is.null(pathToPS)) {
     saveRDS(ps, pathToPS)
@@ -88,7 +89,7 @@ fit_censoring_model <- function(pathToCMData,
   outcomes_for_cyclops <- cohorts %>%
     left_join(censored_outcomes, by = "rowId") %>%
     mutate(y = ifelse(!is.na(outcomeId), 1, 0)) %>%
-    mutate(time = ifelse(!is.na(outcomeId), daysToEvent, daysToObsEnd)) %>%
+    mutate(time = ifelse(!is.na(outcomeId), daysToEvent, daysToCohortEnd)) %>%
     select(rowId, y, time)
 
   cohortMethodData$outcomes_for_cyclops <- outcomes_for_cyclops
@@ -374,7 +375,7 @@ run_legendt2dm_pipeline <- function(pathToCMData,
     show_progress = show_progress
   )
 
-  fit_censoring_model(
+  cox_censoring <- fit_censoring_model(
     pathToCMData = pathToCMData,
     outcomeOfInterestId = outcomeOfInterestId,
     pathToCensoringModel = pathToCensoringModel,
